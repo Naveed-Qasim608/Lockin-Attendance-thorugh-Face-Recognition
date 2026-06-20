@@ -248,23 +248,28 @@ if __name__ == '__main__':
 
     # ── SSL SETUP ────────────────────────────────────────────
     # Browsers block camera on plain HTTP for non-localhost URLs.
-    # We use HTTPS with a self-signed cert so mobile camera works.
-    CERT_FILE = 'cert.pem'
-    KEY_FILE  = 'key.pem'
+    # We use HTTPS with an adhoc cert so mobile camera works.
 
-    use_ssl = os.path.exists(CERT_FILE) and os.path.exists(KEY_FILE)
-    protocol = 'https' if use_ssl else 'http'
-    ssl_context = (CERT_FILE, KEY_FILE) if use_ssl else None
+    use_ssl = True
+    protocol = 'https'
+    ssl_context = 'adhoc'
 
     # ── NGROK TUNNEL ─────────────────────────────────────────
+    # ENABLED FOR FASTER TUNNELING
     public_url = None
     if NGROK_AVAILABLE:
         try:
             # Disconnect all existing tunnels first
             for tunnel in ngrok.get_tunnels():
                 ngrok.disconnect(tunnel.public_url)
-            public_url = ngrok.connect(5000, "http")
+            public_url = ngrok.connect(5000, "http").public_url
             print("  ✓ ngrok tunnel established")
+            
+            # If ngrok provides HTTPS, we don't need local SSL
+            use_ssl = False
+            protocol = 'http'
+            ssl_context = None
+            
         except Exception as e:
             print(f"  ⚠ ngrok error: {e}")
 
@@ -273,7 +278,6 @@ if __name__ == '__main__':
     print("="*60)
     
     if public_url:
-        # Extract the URL if it's a URL object, otherwise use it as is
         url_str = str(public_url)
         print(f"\n  🌐 PUBLIC URL (Safari, iPhone, any browser):")
         print(f"     {url_str}")
