@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — LockIn{% endblock %}
+{% set active = 'dashboard' %}
+
+{% block head %}
+<style>
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-box{background:var(--s1);border:1px solid var(--border);border-radius:var(--rl);padding:18px 20px;position:relative;overflow:hidden}
+.stat-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--sc,var(--cyan));border-radius:99px}
+.sb-val{font-family:var(--display);font-size:34px;line-height:1;color:var(--sc,var(--cyan))}
+.sb-lbl{font-size:11px;color:var(--text2);margin-top:3px}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead tr{border-bottom:1px solid var(--border2)}
+thead th{padding:10px 14px;text-align:left;font-size:10px;font-family:var(--mono);letter-spacing:1.5px;color:var(--text2);font-weight:500;text-transform:uppercase;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+tbody td{padding:11px 14px;color:var(--text);white-space:nowrap}
+.td-name{font-weight:600}
+.td-present{color:var(--green)}
+.td-unknown{color:var(--red)}
+.td-dept{color:var(--text2);font-size:12px}
+.td-time{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.td-conf{font-family:var(--mono);font-size:11px}
+.empty-state{text-align:center;padding:48px;color:var(--text2)}
+.empty-state svg{width:48px;height:48px;fill:currentColor;opacity:.2;margin-bottom:12px}
+
+/* FILE LIST */
+.file-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);transition:border-color .2s}
+.file-item:hover{border-color:var(--border2)}
+.fi-name{font-family:var(--mono);font-size:12px;color:var(--text)}
+.fi-date{font-size:11px;color:var(--text2)}
+
+@media(max-width:640px){
+  .stats-row{grid-template-columns:1fr 1fr}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+    <div>
+      <div class="page-title">DASHBOARD</div>
+      <div class="page-sub" id="dashDate">Today's attendance records</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-o" onclick="loadData()">
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        Refresh
+      </button>
+      <button class="btn btn-p" id="btnDownload" onclick="downloadToday()">
+        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        Download CSV
+      </button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-box" style="--sc:var(--cyan)"><div class="sb-val" id="statPresent">0</div><div class="sb-lbl">Present Today</div></div>
+    <div class="stat-box" style="--sc:var(--red)"><div class="sb-val" id="statUnknown">0</div><div class="sb-lbl">Unknown Attempts</div></div>
+    <div class="stat-box" style="--sc:#339af0"><div class="sb-val" id="statTotal">0</div><div class="sb-lbl">Total Scans</div></div>
+    <div class="stat-box" style="--sc:#845ef7"><div class="sb-val" id="statEnrolled">0</div><div class="sb-lbl">Total Enrolled</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start">
+
+    <!-- ATTENDANCE TABLE -->
+    <div class="card">
+      <div class="cs">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div class="stag" style="margin:0">Today's Records</div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--text2)" id="recordCount">—</div>
+        </div>
+      </div>
+      <div class="cs" style="padding:0">
+        <div class="table-wrap">
+          <table id="attendTable">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>ID</th>
+                <th>Department</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Time</th>
+                <th>Confidence</th>
+                <th>Distance</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr>
+                <td colspan="8">
+                  <div class="empty-state">
+                    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+                    <div>No attendance records yet today.</div>
+                    <div style="font-size:12px;margin-top:6px"><a href="/attendance" style="color:var(--cyan)">Mark Attendance →</a></div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CSV FILES SIDEBAR -->
+    <div style="width:240px;display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div class="cs">
+          <div class="stag">CSV Files</div>
+          <div style="display:flex;flex-direction:column;gap:6px" id="fileList">
+            <div style="font-size:12px;color:var(--text2);text-align:center;padding:16px">No files yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ENROLLED LIST -->
+      <div class="card">
+        <div class="cs">
+          <div class="stag">Enrolled Persons</div>
+          <div style="display:flex;flex-direction:column;gap:6px" id="enrolledList">
+            <div style="font-size:12px;color:var(--text2);text-align:center;padding:16px">Loading...</div>
+          </div>
+        </div>
+        <div class="cs">
+          <a href="/enroll" class="btn btn-p btn-full btn-sm">+ Enrol New Person</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadData(){
+  // Today's attendance
+  try{
+    const r = await fetch('/api/attendance/today');
+    const d = await r.json();
+    document.getElementById('statPresent').textContent = d.summary.total_present||0;
+    document.getElementById('statUnknown').textContent = d.summary.total_unknown||0;
+    document.getElementById('statTotal').textContent = d.summary.total_scans||0;
+    document.getElementById('dashDate').textContent = 'Date: ' + (d.summary.date||'—');
+    renderTable(d.records||[]);
+  }catch(e){ showToast('Could not load attendance','red'); }
+
+  // Enrolled count
+  try{
+    const r = await fetch('/api/enrolled');
+    const d = await r.json();
+    document.getElementById('statEnrolled').textContent = d.count;
+    renderEnrolled(d.data||[]);
+  }catch(e){}
+
+  // CSV files
+  try{
+    const r = await fetch('/api/attendance/files');
+    const d = await r.json();
+    renderFiles(d.files||[]);
+  }catch(e){}
+}
+
+function renderTable(records){
+  const tbody = document.getElementById('tableBody');
+  document.getElementById('recordCount').textContent = records.length + ' records';
+  if(!records.length){
+    tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+      <div>No records yet. <a href="/attendance" style="color:var(--cyan)">Mark Attendance →</a></div>
+    </div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = records.map(r=>{
+    const isPresent = r.Status === 'Present';
+    return `<tr>
+      <td class="td-name">${r.Name||'—'}</td>
+      <td class="td-dept">${r.Student_ID||'—'}</td>
+      <td class="td-dept">${r.Department||'—'}</td>
+      <td class="td-dept">${r.Role||'—'}</td>
+      <td><span class="badge ${isPresent?'badge-green':'badge-red'}">${r.Status||'—'}</span></td>
+      <td class="td-time">${r.Time||'—'}</td>
+      <td class="td-conf" style="color:${isPresent?'var(--green)':'var(--red)'}">${r.Confidence||'—'}</td>
+      <td class="td-time">${r.Distance||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFiles(files){
+  const el = document.getElementById('fileList');
+  if(!files.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--text2);text-align:center;padding:12px">No CSV files yet</div>';
+    return;
+  }
+  el.innerHTML = files.map(f=>{
+    const date = f.replace('attendance_','').replace('.csv','');
+    return `<div class="file-item">
+      <div>
+        <div class="fi-name">📄 ${date}</div>
+        <div class="fi-date">.csv</div>
+      </div>
+      <button class="btn btn-g btn-sm" onclick="downloadFile('${f}')">↓</button>
+    </div>`;
+  }).join('');
+}
+
+function renderEnrolled(people){
+  const el = document.getElementById('enrolledList');
+  if(!people.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--text2);text-align:center;padding:12px">No one enrolled</div>';
+    return;
+  }
+  el.innerHTML = people.map(p=>{
+    const init = p.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    return `<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,212,184,.1);border:1px solid rgba(0,212,184,.2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--cyan);flex-shrink:0">${init}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
+        <div style="font-size:10px;color:var(--text2);font-family:var(--mono)">${p.role} · ${p.department}</div>
+      </div>
+      <button onclick="deletePerson('${p.name}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 4px;transition:color .18s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function deletePerson(name){
+  if(!confirm(`Remove ${name} from Face DB?`)) return;
+  try{
+    const r = await fetch('/api/delete/'+encodeURIComponent(name),{method:'DELETE'});
+    const d = await r.json();
+    showToast(d.message, d.success?'green':'red');
+    if(d.success) loadData();
+  }catch(e){ showToast('Error','red'); }
+}
+
+async function downloadToday(){
+  try{
+    const r = await fetch('/api/attendance/files');
+    const d = await r.json();
+    if(d.files && d.files.length){
+      const today = d.files[0]; // most recent = today
+      downloadFile(today);
+    }else{ showToast('No CSV file yet today','amber'); }
+  }catch(e){ showToast('Error','red'); }
+}
+
+function downloadFile(filename){
+  const a = document.createElement('a');
+  a.href = '/api/attendance/download/' + filename;
+  a.download = filename; a.click();
+  showToast('Downloading '+filename,'green');
+}
+
+// Load on page open
+loadData();
+// Auto-refresh every 10 seconds
+setInterval(loadData, 10000);
+</script>
+{% endblock %}

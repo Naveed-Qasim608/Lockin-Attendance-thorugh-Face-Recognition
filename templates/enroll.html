@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+{% block title %}Enrolment — LockIn{% endblock %}
+{% set active = 'enroll' %}
+
+{% block head %}
+<style>
+.enroll-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1000px;margin:0 auto}
+.cam-wrap{position:relative;background:#000;border-radius:var(--rl);overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-idle{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--text2)}
+.cam-idle svg{width:48px;height:48px;fill:currentColor;opacity:.3}
+.cam-idle p{font-size:13px}
+.cam-overlay{position:absolute;inset:0;pointer-events:none}
+.live-badge{position:absolute;top:10px;left:10px;background:rgba(240,62,62,.92);border-radius:5px;padding:3px 9px;font-size:10px;font-family:var(--mono);font-weight:700;color:#fff;display:none;align-items:center;gap:4px;z-index:10}
+.lb-dot{width:5px;height:5px;background:#fff;border-radius:50%;animation:blink 1s step-start infinite}
+@keyframes blink{50%{opacity:0}}
+.face-badge{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.75);border:1px solid rgba(0,212,184,.25);border-radius:5px;padding:3px 9px;font-size:10px;font-family:var(--mono);color:var(--cyan);z-index:10;display:none}
+.cam-progbar{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(0,0,0,.4)}
+.cam-progfill{height:100%;background:var(--cyan);transition:width .4s ease;width:0%}
+
+.thumb-strip{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{width:64px;height:64px;border-radius:8px;border:1.5px dashed var(--border2);overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;background:var(--s2);flex-shrink:0;transition:all .3s}
+.thumb.done{border-style:solid;border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,184,.15)}
+.thumb img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.thumb .tn{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.thumb .tick{position:absolute;bottom:2px;right:2px;width:14px;height:14px;background:var(--cyan);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.thumb .tick svg{width:8px;height:8px;stroke:#000;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+
+.status-box{display:flex;align-items:center;gap:8px;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px;font-size:12px;font-family:var(--mono)}
+.s-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s}
+.s-dot.green{background:var(--cyan);box-shadow:0 0 6px rgba(0,212,184,.5)}
+.s-dot.amber{background:var(--amber);animation:blink 1s step-start infinite}
+.s-dot.red{background:var(--red)}
+
+@media(max-width:700px){
+  .enroll-layout{grid-template-columns:1fr}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <div class="page-title">ENROLMENT</div>
+  <div class="page-sub">Fill in details, open camera (phone or laptop), capture 5 photos automatically</div>
+
+  <div class="enroll-layout">
+
+    <!-- LEFT: CAMERA -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div class="cs">
+          <div class="stag">Live Camera</div>
+          <div class="cam-wrap" id="camWrap">
+            <video id="camVid" autoplay muted playsinline style="display:none"></video>
+            <canvas id="camCanvas" class="cam-overlay" style="display:none"></canvas>
+            <div class="cam-idle" id="camIdle">
+              <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+              <p>Camera off — click Start Camera</p>
+            </div>
+            <div class="live-badge" id="liveBadge"><div class="lb-dot"></div>LIVE</div>
+            <div class="face-badge" id="faceBadge">0 faces</div>
+            <div class="cam-progbar"><div class="cam-progfill" id="camProg"></div></div>
+          </div>
+        </div>
+        <div class="cs">
+          <div class="stag">Captures (<span id="capCount">0</span>/5)</div>
+          <div class="thumb-strip" id="thumbStrip"></div>
+          <div style="margin-top:10px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;font-family:var(--mono);color:var(--text2);margin-bottom:5px">
+              <span id="capLabel">0 / 5 captured</span>
+              <span id="capHint" style="color:var(--text3)">capture needed</span>
+            </div>
+            <div class="pbar-wrap"><div class="pbar" id="capBar"></div></div>
+          </div>
+        </div>
+        <div class="cs">
+          <div class="status-box"><div class="s-dot" id="sDot"></div><span id="sMsg">Ready. Start camera to begin.</span></div>
+        </div>
+        <div class="cs">
+          <div class="btn-row">
+            <button class="btn btn-o" id="btnStart" onclick="startCamera()">
+              <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+              Start Camera
+            </button>
+            <button class="btn btn-g btn-sm" onclick="clearCaptures()">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: FORM -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div class="cs">
+          <div class="stag">Personal Details</div>
+          <div class="fgrid">
+            <div class="fg">
+              <label class="fl">First Name *</label>
+              <input class="fi" id="fFirst" placeholder="e.g. Ahmed" oninput="checkReady()"/>
+            </div>
+            <div class="fg">
+              <label class="fl">Last Name</label>
+              <input class="fi" id="fLast" placeholder="e.g. Khan"/>
+            </div>
+            <div class="fg">
+              <label class="fl">Student ID / Roll No.</label>
+              <input class="fi" id="fId" placeholder="e.g. F21-001"/>
+            </div>
+            <div class="fg">
+              <label class="fl">Department / Class</label>
+              <input class="fi" id="fDept" placeholder="e.g. CS-6A"/>
+            </div>
+            <div class="fg full">
+              <label class="fl">Role</label>
+              <select class="fi" id="fRole">
+                <option>Student</option>
+                <option>Teacher</option>
+                <option>Staff</option>
+                <option>Admin</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="cs">
+          <div class="stag">How It Works</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="background:var(--s2);border-radius:var(--r);padding:12px 14px;border-left:2px solid var(--cyan)">
+              <div style="font-size:12px;font-weight:600;margin-bottom:3px">Face Embedding (128-D)</div>
+              <div style="font-size:11px;color:var(--text2);line-height:1.55">Deep neural network converts your face into 128 unique numbers. Mean of 5 captures stored in database.</div>
+            </div>
+            <div style="background:var(--s2);border-radius:var(--r);padding:12px 14px;border-left:2px solid #845ef7">
+              <div style="font-size:12px;font-weight:600;margin-bottom:3px">Euclidean Distance Matching</div>
+              <div style="font-size:11px;color:var(--text2);line-height:1.55">At attendance time: distance between your face embedding and stored one must be &lt; 0.42 to match.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cs">
+          <button class="btn btn-p btn-full" id="btnEnrol" onclick="doEnrol()" disabled style="padding:13px;font-size:14px">
+            <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            Enrol in Face Database
+          </button>
+          <div id="enrollResult" style="margin-top:10px;display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let stream = null;
+let captures = [];      // base64 images
+let detLoop = null;
+let lastCapTime = 0;
+const REQUIRED = 5;
+const CAP_INTERVAL = 1200; // ms between auto-captures
+
+// Init thumb strip
+function initThumbs(){
+  const s = document.getElementById('thumbStrip'); s.innerHTML='';
+  for(let i=0;i<REQUIRED;i++){
+    const d=document.createElement('div'); d.className='thumb'; d.id='th'+i;
+    d.innerHTML=`<span class="tn">${i+1}</span>`; s.appendChild(d);
+  }
+}
+
+function updateThumbs(){
+  for(let i=0;i<REQUIRED;i++){
+    const el=document.getElementById('th'+i); if(!el) continue;
+    if(captures[i]){
+      el.classList.add('done');
+      el.innerHTML=`<img src="${captures[i]}"/><div class="tick"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+    }else{
+      el.classList.remove('done'); el.innerHTML=`<span class="tn">${i+1}</span>`;
+    }
+  }
+  const n=captures.length;
+  document.getElementById('capCount').textContent=n;
+  document.getElementById('capLabel').textContent=n+' / '+REQUIRED+' captured';
+  document.getElementById('capBar').style.width=(n/REQUIRED*100)+'%';
+  document.getElementById('capHint').textContent=n>=REQUIRED?'✓ Ready!': (REQUIRED-n)+' more needed';
+  checkReady();
+}
+
+function setStatus(msg, type=''){
+  document.getElementById('sMsg').textContent=msg;
+  const d=document.getElementById('sDot');
+  d.className='s-dot'; if(type) d.classList.add(type);
+}
+
+function checkReady(){
+  const hasName=document.getElementById('fFirst').value.trim().length>0;
+  document.getElementById('btnEnrol').disabled=!(hasName && captures.length>=REQUIRED);
+}
+
+// ── CAMERA ──────────────────────────────────────────────────
+async function startCamera(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{width:{ideal:640},height:{ideal:480},facingMode:'user'}, audio:false
+    });
+    const vid=document.getElementById('camVid');
+    vid.srcObject=stream; vid.style.display='block';
+    document.getElementById('camCanvas').style.display='block';
+    document.getElementById('camIdle').style.display='none';
+    document.getElementById('liveBadge').style.display='flex';
+    document.getElementById('faceBadge').style.display='block';
+    document.getElementById('btnStart').textContent='Camera On';
+    document.getElementById('btnStart').disabled=true;
+    setStatus('Camera active. Face auto-capture will start...', 'green');
+    vid.onloadedmetadata=()=>{ startDetectLoop(); };
+  }catch(e){
+    console.error('Camera access error:', e);
+    let errorMsg = 'Camera access denied';
+    if(e.name === 'NotAllowedError') {
+      errorMsg = 'Camera permission denied - check browser settings';
+    } else if(e.name === 'NotFoundError') {
+      errorMsg = 'No camera found on this device';
+    } else if(e.name === 'NotSecureError') {
+      errorMsg = 'Camera requires HTTPS connection';
+    } else if(e.message) {
+      errorMsg = e.message;
+    }
+    setStatus('Camera error: '+errorMsg, 'red');
+    showToast(errorMsg, 'red');
+  }
+}
+
+function startDetectLoop(){
+  const vid=document.getElementById('camVid');
+  const canvas=document.getElementById('camCanvas');
+  const ctx=canvas.getContext('2d');
+  canvas.width=vid.videoWidth; canvas.height=vid.videoHeight;
+
+  let skip=0;
+  function loop(){
+    if(!stream){ return; }
+    skip++;
+    // Draw a simple scan overlay even without face detection lib on frontend
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Draw targeting reticle in center
+    const cx=canvas.width/2, cy=canvas.height/2;
+    const bw=canvas.width*0.45, bh=canvas.height*0.55;
+    const bx=cx-bw/2, by=cy-bh/2;
+    const cs=22;
+    ctx.strokeStyle='rgba(0,212,184,0.7)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(bx+cs,by);ctx.lineTo(bx,by);ctx.lineTo(bx,by+cs);
+    ctx.moveTo(bx+bw-cs,by);ctx.lineTo(bx+bw,by);ctx.lineTo(bx+bw,by+cs);
+    ctx.moveTo(bx,by+bh-cs);ctx.lineTo(bx,by+bh);ctx.lineTo(bx+cs,by+bh);
+    ctx.moveTo(bx+bw-cs,by+bh);ctx.lineTo(bx+bw,by+bh);ctx.lineTo(bx+bw,by+bh-cs);
+    ctx.stroke();
+    // Instruction text
+    ctx.fillStyle='rgba(0,212,184,0.7)';
+    ctx.font='12px JetBrains Mono, monospace';
+    ctx.textAlign='center';
+    ctx.fillText('Position face in frame', cx, by-8);
+    ctx.textAlign='left';
+
+    // Auto capture every CAP_INTERVAL ms
+    const now=Date.now();
+    if(captures.length<REQUIRED && now-lastCapTime>CAP_INTERVAL){
+      lastCapTime=now;
+      snapPhoto();
+    }
+
+    detLoop=requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+function snapPhoto(){
+  const vid=document.getElementById('camVid');
+  const tmp=document.createElement('canvas');
+  tmp.width=320; tmp.height=320;
+  const ctx=tmp.getContext('2d');
+  // Crop center square
+  const s=Math.min(vid.videoWidth,vid.videoHeight);
+  const sx=(vid.videoWidth-s)/2, sy=(vid.videoHeight-s)/2;
+  ctx.drawImage(vid,sx,sy,s,s,0,0,320,320);
+  const dataUrl=tmp.toDataURL('image/jpeg',0.85);
+  captures.push(dataUrl);
+  document.getElementById('camProg').style.width=(captures.length/REQUIRED*100)+'%';
+  setStatus(`Captured ${captures.length}/${REQUIRED} — stay still...`, 'amber');
+  updateThumbs();
+  if(captures.length>=REQUIRED){
+    setStatus('✓ All 5 captures done!', 'green');
+    document.getElementById('faceBadge').textContent='5/5 ✓';
+    stopCamera();
+  }
+}
+
+function stopCamera(){
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  cancelAnimationFrame(detLoop);
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStart').textContent='Start Camera';
+  document.getElementById('liveBadge').style.display='none';
+}
+
+function clearCaptures(){
+  captures=[];
+  if(stream){ stopCamera(); }
+  document.getElementById('camProg').style.width='0%';
+  document.getElementById('faceBadge').textContent='0 faces';
+  document.getElementById('camVid').style.display='none';
+  document.getElementById('camCanvas').style.display='none';
+  document.getElementById('camIdle').style.display='flex';
+  setStatus('Captures cleared.','');
+  updateThumbs();
+}
+
+// ── ENROL ───────────────────────────────────────────────────
+async function doEnrol(){
+  const first=document.getElementById('fFirst').value.trim();
+  const last=document.getElementById('fLast').value.trim();
+  const name=first+(last?' '+last:'');
+  const student_id=document.getElementById('fId').value.trim()||'ID-'+Date.now().toString().slice(-4);
+  const department=document.getElementById('fDept').value.trim()||'—';
+  const role=document.getElementById('fRole').value;
+
+  if(!first||captures.length<REQUIRED) return;
+
+  const btn=document.getElementById('btnEnrol');
+  btn.disabled=true; btn.textContent='Processing...';
+  setStatus('Sending to server for face encoding...','amber');
+
+  try{
+    const res=await fetch('/api/enroll',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, student_id, department, role, images:captures})
+    });
+    const data=await res.json();
+
+    if(data.success){
+      setStatus('✓ '+data.message,'green');
+      showToast(data.message,'green');
+      const div=document.getElementById('enrollResult');
+      div.style.display='block';
+      div.innerHTML=`<div style="background:rgba(32,201,151,.08);border:1px solid rgba(32,201,151,.2);border-radius:var(--r);padding:12px 14px;font-size:13px">
+        <strong style="color:var(--green)">✓ ${name} enrolled!</strong><br>
+        <span style="color:var(--text2);font-size:12px">${role} · ${department} · ${data.captures} captures stored</span>
+      </div>`;
+      captures=[]; updateThumbs();
+      ['fFirst','fLast','fId','fDept'].forEach(id=>document.getElementById(id).value='');
+      updateNavCount();
+    }else{
+      setStatus(data.message,'red');
+      showToast(data.message,'red');
+    }
+  }catch(e){
+    setStatus('Server error: '+e.message,'red');
+    showToast('Connection error','red');
+  }
+  btn.disabled=false; btn.textContent='Enrol in Face Database';
+  checkReady();
+}
+
+initThumbs();
+</script>
+{% endblock %}

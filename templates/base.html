@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>{% block title %}LockIn{% endblock %}</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#030508;--s1:#08090f;--s2:#0e1018;--s3:#141720;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
+  --cyan:#00d4b8;--cyan2:#00a896;--cyanglow:rgba(0,212,184,0.15);
+  --red:#f03e3e;--amber:#f5a623;--green:#20c997;
+  --text:#cdd5e0;--text2:#7a8494;--text3:#3d4450;
+  --font:'Inter',sans-serif;--display:'Bebas Neue',sans-serif;--mono:'JetBrains Mono',monospace;
+  --r:8px;--rl:14px;--rxl:18px;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+a{text-decoration:none;color:inherit}
+
+/* NAV */
+nav{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:rgba(3,5,8,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.nav-logo{display:flex;align-items:center;gap:8px;font-family:var(--display);font-size:20px;letter-spacing:2px}
+.nav-logo-box{width:26px;height:26px;border:1.5px solid var(--cyan);border-radius:5px;display:flex;align-items:center;justify-content:center}
+.nav-logo-box svg{width:13px;height:13px;fill:var(--cyan)}
+.nav-logo em{color:var(--cyan);font-style:normal}
+.nav-links{display:flex;gap:2px}
+.nav-link{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;color:var(--text2);transition:all .18s}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.nav-link.active{color:var(--cyan);background:rgba(0,212,184,.07)}
+.nav-db{font-family:var(--mono);font-size:11px;background:rgba(0,212,184,.07);border:1px solid rgba(0,212,184,.18);border-radius:99px;padding:4px 10px;color:var(--cyan)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 20px;border-radius:var(--r);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .16s;white-space:nowrap}
+.btn svg{width:14px;height:14px;fill:currentColor;flex-shrink:0}
+.btn-p{background:var(--cyan);color:#000}
+.btn-p:hover{background:#00f0d0;box-shadow:0 4px 14px rgba(0,212,184,.3)}
+.btn-p:disabled{opacity:.3;cursor:not-allowed}
+.btn-o{background:transparent;color:var(--text);border:1px solid var(--border2)}
+.btn-o:hover{background:var(--s2)}
+.btn-d{background:rgba(240,62,62,.08);color:var(--red);border:1px solid rgba(240,62,62,.18)}
+.btn-d:hover{background:rgba(240,62,62,.14)}
+.btn-g{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-g:hover{color:var(--text)}
+.btn-full{width:100%}
+.btn-sm{padding:6px 12px;font-size:11px}
+.btn-lg{padding:13px 28px;font-size:15px;border-radius:10px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* CARDS */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:var(--rxl)}
+.card-pad{padding:22px}
+.cs{padding:18px 22px;border-bottom:1px solid var(--border)}
+.cs:last-child{border-bottom:none}
+
+/* FORM */
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.full{grid-column:1/-1}
+.fl{font-size:12px;color:var(--text2);font-weight:500}
+.fi{background:var(--s2);border:1px solid var(--border2);color:var(--text);font-family:var(--font);font-size:14px;padding:10px 13px;border-radius:var(--r);outline:none;transition:border-color .2s,box-shadow .2s;width:100%}
+.fi:focus{border-color:rgba(0,212,184,.4);box-shadow:0 0 0 3px rgba(0,212,184,.06)}
+.fi::placeholder{color:var(--text3)}
+select.fi{cursor:pointer}
+
+/* SECTION TAG */
+.stag{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:10px}
+
+/* STATUS / BADGE */
+.badge{font-size:10px;padding:3px 9px;border-radius:4px;font-family:var(--mono);font-weight:600}
+.badge-green{background:rgba(32,201,151,.09);color:var(--green)}
+.badge-red{background:rgba(240,62,62,.08);color:var(--red)}
+.badge-amber{background:rgba(245,166,35,.09);color:var(--amber)}
+.badge-cyan{background:rgba(0,212,184,.08);color:var(--cyan)}
+
+/* PROGRESS */
+.pbar-wrap{background:var(--s3);border-radius:99px;height:3px;overflow:hidden}
+.pbar{height:100%;background:linear-gradient(90deg,var(--cyan2),var(--cyan));border-radius:99px;transition:width .4s ease;width:0%}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--s2);border:1px solid var(--border2);border-radius:9px;padding:11px 16px;font-size:13px;display:flex;align-items:center;gap:8px;z-index:999;transform:translateY(60px);opacity:0;transition:all .28s;pointer-events:none;max-width:300px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast.show{transform:translateY(0);opacity:1}
+.toast-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* DIVIDER */
+.divider{height:1px;background:var(--border)}
+
+/* WRAP */
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px}
+.page-title{font-family:var(--display);font-size:30px;letter-spacing:1px;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--text2);margin-bottom:22px}
+
+/* RESPONSIVE */
+@media(max-width:640px){
+  .fgrid{grid-template-columns:1fr}
+  .fg.full{grid-column:1}
+  nav{padding:0 14px}
+  .nav-links{display:none}
+  .wrap{padding:16px 14px}
+}
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-box"><svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg></div>
+    LOCK<em>IN</em>
+  </a>
+  <div class="nav-links">
+    <a href="/" class="nav-link {% if active=='home' %}active{% endif %}">Home</a>
+    <a href="/enroll" class="nav-link {% if active=='enroll' %}active{% endif %}">Enrolment</a>
+    <a href="/attendance" class="nav-link {% if active=='attend' %}active{% endif %}">Attendance</a>
+    <a href="/dashboard" class="nav-link {% if active=='dashboard' %}active{% endif %}">Dashboard</a>
+  </div>
+  <div class="nav-db" id="navCount">— enrolled</div>
+</nav>
+
+{% block content %}{% endblock %}
+
+<!-- TOAST -->
+<div class="toast" id="toast"><div class="toast-dot" id="toastDot"></div><span id="toastMsg"></span></div>
+
+<script>
+// ── Shared JS utilities ─────────────────────────────────────
+let toastTimer;
+function showToast(msg, type='cyan'){
+  const colors={cyan:'#00d4b8',red:'#f03e3e',amber:'#f5a623',green:'#20c997'};
+  document.getElementById('toastMsg').textContent=msg;
+  document.getElementById('toastDot').style.background=colors[type]||colors.cyan;
+  const t=document.getElementById('toast'); t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+async function updateNavCount(){
+  try{
+    const r=await fetch('/api/enrolled'); const d=await r.json();
+    document.getElementById('navCount').textContent=d.count+' enrolled';
+  }catch(e){}
+}
+updateNavCount();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

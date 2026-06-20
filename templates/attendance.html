@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+{% block title %}Mark Attendance — LockIn{% endblock %}
+{% set active = 'attend' %}
+
+{% block head %}
+<style>
+.attend-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1100px;margin:0 auto}
+
+/* CAMERA SIDE */
+.cam-wrap{position:relative;background:#000;border-radius:var(--rl);overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transform:scaleX(-1)}
+.cam-idle{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--text2);text-align:center;padding:20px}
+.cam-idle svg{width:48px;height:48px;fill:currentColor;opacity:.25}
+.cam-idle p{font-size:13px}
+.live-badge{position:absolute;top:10px;left:10px;background:rgba(240,62,62,.92);border-radius:5px;padding:3px 9px;font-size:10px;font-family:var(--mono);font-weight:700;color:#fff;display:none;align-items:center;gap:4px;z-index:10}
+.lb-dot{width:5px;height:5px;background:#fff;border-radius:50%;animation:blink 1s step-start infinite}
+@keyframes blink{50%{opacity:0}}
+.face-badge{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.75);border:1px solid rgba(0,212,184,.25);border-radius:5px;padding:3px 9px;font-size:10px;font-family:var(--mono);color:var(--cyan);z-index:10;display:none}
+
+/* RESULT CARDS */
+.results-area{display:flex;flex-direction:column;gap:10px}
+.result-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--rl);padding:18px;display:flex;align-items:center;gap:14px;animation:slideIn .3s ease;transition:border-color .3s;position:relative;overflow:hidden}
+.result-card::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+.result-card.known{border-color:rgba(0,212,184,.3);background:rgba(0,212,184,.03)}
+.result-card.known::before{background:linear-gradient(135deg,rgba(0,212,184,.06) 0%,transparent 60%);opacity:1}
+.result-card.unknown{border-color:rgba(240,62,62,.25);background:rgba(240,62,62,.02)}
+.result-card.unknown::before{background:linear-gradient(135deg,rgba(240,62,62,.06) 0%,transparent 60%);opacity:1}
+.result-card.remarked{border-color:rgba(245,166,35,.3);background:rgba(245,166,35,.02)}
+.result-card.remarked::before{background:linear-gradient(135deg,rgba(245,166,35,.06) 0%,transparent 60%);opacity:1}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.rc-av{width:52px;height:52px;border-radius:50%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;border:2px solid var(--border2)}
+.rc-av img{width:100%;height:100%;object-fit:cover}
+.rc-av.known{border-color:var(--cyan);background:rgba(0,212,184,.1);color:var(--cyan)}
+.rc-av.unknown{border-color:var(--red);background:rgba(240,62,62,.08);color:var(--red)}
+.rc-info{flex:1;min-width:0}
+.rc-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-meta{font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:2px}
+.rc-verdict{font-size:10px;padding:3px 10px;border-radius:4px;font-family:var(--mono);font-weight:600;white-space:nowrap;align-self:flex-start}
+.rc-verdict.known{background:rgba(0,212,184,.09);color:var(--cyan)}
+.rc-verdict.unknown{background:rgba(240,62,62,.08);color:var(--red)}
+.conf-wrap{width:100%;height:3px;background:var(--s3);border-radius:99px;overflow:hidden;margin-top:6px}
+.conf-bar{height:100%;border-radius:99px;transition:width .5s ease}
+
+/* LOG */
+.log-list{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto}
+.log-list::-webkit-scrollbar{width:3px}
+.log-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+.log-item{display:flex;align-items:center;gap:9px;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:9px 12px;animation:slideIn .25s ease}
+.li-av{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.li-av.k{background:rgba(0,212,184,.1);color:var(--cyan)}
+.li-av.u{background:rgba(240,62,62,.08);color:var(--red)}
+.li-info{flex:1;min-width:0}
+.li-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-time{font-size:10px;color:var(--text2);font-family:var(--mono)}
+.li-tag{font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);font-weight:600;white-space:nowrap}
+.li-tag.p{background:rgba(0,212,184,.07);color:var(--cyan)}
+.li-tag.u{background:rgba(240,62,62,.06);color:var(--red)}
+
+/* SCANNING OVERLAY */
+.scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5}
+.scan-ring{width:80px;height:80px;border:2px solid rgba(0,212,184,.5);border-top-color:var(--cyan);border-radius:50%;animation:spin 1s linear infinite;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* MODE TOGGLE */
+.mode-pills{display:flex;gap:6px;background:var(--s2);border:1px solid var(--border);border-radius:99px;padding:4px}
+.mode-pill{padding:5px 16px;border-radius:99px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text2);font-family:var(--font);transition:all .18s}
+.mode-pill.active{background:var(--s1);color:var(--cyan);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+
+@media(max-width:700px){
+  .attend-layout{grid-template-columns:1fr}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+    <div>
+      <div class="page-title">MARK ATTENDANCE</div>
+      <div class="page-sub">Point camera at face(s) — multiple people detected simultaneously</div>
+    </div>
+    <div class="mode-pills">
+      <button class="mode-pill active" id="modeLaptop" onclick="switchMode('laptop')">💻 Laptop Cam</button>
+      <button class="mode-pill" id="modeMobile" onclick="switchMode('mobile')">📱 Mobile Cam</button>
+    </div>
+  </div>
+
+  <div class="attend-layout">
+
+    <!-- LEFT: CAMERA -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div class="cs">
+          <div class="stag">Camera Feed</div>
+          <div class="cam-wrap" id="camWrap">
+            <video id="camVid" autoplay muted playsinline style="display:none"></video>
+            <canvas id="camCanvas"></canvas>
+            <div class="cam-idle" id="camIdle">
+              <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+              <p>Camera off<br><span style="font-size:11px;color:var(--text3)">Choose mode above and start</span></p>
+            </div>
+            <div class="live-badge" id="liveBadge"><div class="lb-dot"></div>LIVE</div>
+            <div class="face-badge" id="faceBadge">0 faces</div>
+            <div class="scan-overlay"><div class="scan-ring" id="scanRing"></div></div>
+          </div>
+        </div>
+
+        <!-- MOBILE MODE INSTRUCTIONS -->
+        <div class="cs" id="mobileInstructions" style="display:none">
+          <div class="stag">Mobile Camera Setup</div>
+          <div style="background:rgba(0,212,184,.05);border:1px solid rgba(0,212,184,.15);border-radius:var(--r);padding:14px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--cyan)">📱 Open on your Phone:</div>
+            <div style="font-family:var(--mono);font-size:13px;background:var(--s2);padding:8px 12px;border-radius:6px;color:var(--text);margin-bottom:10px;word-break:break-all" id="mobileUrl">Getting IP...</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.6">
+              1. Connect phone to <strong style="color:var(--text)">same WiFi</strong> as laptop<br>
+              2. Open above URL in <strong style="color:var(--text)">Safari (iPhone) / Chrome (Android)</strong><br>
+              3. You'll see a security warning — tap <strong style="color:var(--amber)">"Advanced" → "Proceed anyway"</strong><br>
+              4. Allow camera permission<br>
+              5. Point phone at faces — results appear here instantly
+            </div>
+          </div>
+        </div>
+
+        <div class="cs">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text2)">Auto-scan every <span id="intervalLabel">2</span>s</div>
+            <input type="range" id="intervalSlider" min="1" max="5" value="2" style="width:80px;accent-color:var(--cyan)" oninput="updateInterval(this.value)"/>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-p" id="btnStart" onclick="startAttendance()" style="flex:1">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              Start Scanning
+            </button>
+            <button class="btn btn-d" id="btnStop" onclick="stopAttendance()" disabled>Stop</button>
+          </div>
+        </div>
+
+        <div class="cs">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px;font-family:var(--mono)">
+            <div class="s-dot" id="sDot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0"></div>
+            <span id="sMsg">Ready to scan.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: RESULTS + LOG -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <!-- LIVE RESULT -->
+      <div class="card">
+        <div class="cs">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="stag" style="margin:0">Live Recognition</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="lastScanTime">—</div>
+          </div>
+        </div>
+        <div class="cs">
+          <div class="results-area" id="resultsArea">
+            <div style="text-align:center;padding:24px;color:var(--text2);font-size:13px">
+              Start scanning to see results here
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ATTENDANCE LOG -->
+      <div class="card">
+        <div class="cs">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="stag" style="margin:0">Session Log</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:11px;font-family:var(--mono);color:var(--text2)" id="logCount">0 records</span>
+              <button class="btn btn-g btn-sm" onclick="clearLog()">Clear</button>
+            </div>
+          </div>
+        </div>
+        <div class="cs">
+          <div class="log-list" id="logList">
+            <div style="font-size:13px;color:var(--text2);text-align:center;padding:16px">No records yet</div>
+          </div>
+        </div>
+        <div class="cs">
+          <a href="/dashboard" class="btn btn-o btn-full">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+            View Full Dashboard →
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let stream = null;
+let scanInterval = null;
+let scanDelay = 2000;
+let isScanning = false;
+let logData = [];
+let mode = 'laptop'; // 'laptop' or 'mobile'
+
+// ── MODE SWITCH ──────────────────────────────────────────────
+function switchMode(m){
+  mode = m;
+  document.getElementById('modeLaptop').classList.toggle('active', m==='laptop');
+  document.getElementById('modeMobile').classList.toggle('active', m==='mobile');
+  document.getElementById('mobileInstructions').style.display = m==='mobile' ? 'block' : 'none';
+  if(m==='mobile') fetchLocalIP();
+}
+
+async function fetchLocalIP(){
+  const host = window.location.hostname;
+  const port = window.location.port || '5000';
+  const proto = window.location.protocol; // will be https:// when SSL is on
+  document.getElementById('mobileUrl').textContent = `${proto}//${host}:${port}/attendance`;
+}
+
+function updateInterval(v){
+  scanDelay = v * 1000;
+  document.getElementById('intervalLabel').textContent = v;
+  if(isScanning){ clearInterval(scanInterval); scanInterval=setInterval(scanFrame, scanDelay); }
+}
+
+function setStatus(msg, type=''){
+  document.getElementById('sMsg').textContent = msg;
+  const d = document.getElementById('sDot');
+  d.className = '';
+  d.style.cssText = `width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:background .3s;background:${
+    type==='green'?'var(--cyan)':type==='amber'?'var(--amber)':type==='red'?'var(--red)':'var(--text3)'}`;
+}
+
+// ── CAMERA ──────────────────────────────────────────────────
+async function startAttendance(){
+  try{
+    // For mobile mode, camera is on mobile — just show instructions
+    // For laptop mode, use laptop webcam
+    const constraints = {
+      video:{
+        width:{ideal:640}, height:{ideal:480},
+        facingMode: mode==='mobile' ? 'environment' : 'user'
+      },
+      audio:false
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const vid = document.getElementById('camVid');
+    vid.srcObject = stream; vid.style.display = 'block';
+    document.getElementById('camIdle').style.display = 'none';
+    document.getElementById('liveBadge').style.display = 'flex';
+    document.getElementById('faceBadge').style.display = 'block';
+    const canvas = document.getElementById('camCanvas');
+    vid.onloadedmetadata = () => {
+      canvas.width = vid.videoWidth;
+      canvas.height = vid.videoHeight;
+    };
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('btnStop').disabled = false;
+    isScanning = true;
+    setStatus('Scanning for faces...', 'green');
+    // Start periodic scanning
+    await scanFrame(); // immediate first scan
+    scanInterval = setInterval(scanFrame, scanDelay);
+  }catch(e){
+    setStatus('Camera error: ' + e.message, 'red');
+    showToast('Camera error: ' + e.message, 'red');
+  }
+}
+
+function stopAttendance(){
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  clearInterval(scanInterval);
+  isScanning = false;
+  document.getElementById('camVid').style.display = 'none';
+  document.getElementById('camIdle').style.display = 'flex';
+  document.getElementById('liveBadge').style.display = 'none';
+  document.getElementById('faceBadge').style.display = 'none';
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+  document.getElementById('scanRing').style.display = 'none';
+  setStatus('Scanning stopped.', '');
+}
+
+// ── SCAN FRAME ───────────────────────────────────────────────
+async function scanFrame(){
+  const vid = document.getElementById('camVid');
+  if(!vid.videoWidth) return;
+
+  document.getElementById('scanRing').style.display = 'block';
+  setStatus('Processing frame...', 'amber');
+
+  // Capture frame to canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = vid.videoWidth; canvas.height = vid.videoHeight;
+  const ctx = canvas.getContext('2d');
+  // Un-mirror for server processing (server sees normal image)
+  ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+  ctx.drawImage(vid, 0, 0);
+  const imageB64 = canvas.toDataURL('image/jpeg', 0.8);
+
+  try{
+    const res = await fetch('/api/recognize', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({image: imageB64})
+    });
+    const data = await res.json();
+    document.getElementById('scanRing').style.display = 'none';
+
+    if(!data.success){
+      setStatus('Server error.', 'red'); return;
+    }
+
+    const faceCt = data.faces ? data.faces.length : 0;
+    document.getElementById('faceBadge').textContent = faceCt + (faceCt===1?' face':' faces');
+
+    if(faceCt === 0){
+      setStatus('No face detected — move closer', 'amber');
+      showNoFace();
+      return;
+    }
+
+    // Draw bounding boxes on display canvas
+    drawBoxes(data.faces, vid.videoWidth, vid.videoHeight);
+
+    // Show results
+    showResults(data.faces);
+    document.getElementById('lastScanTime').textContent = new Date().toLocaleTimeString();
+    const knownCount = data.faces.filter(f=>f.is_known).length;
+    setStatus(`${faceCt} face(s) detected · ${knownCount} recognised`, 'green');
+
+    // Add to log
+    data.faces.forEach(f => addToLog(f));
+
+  }catch(e){
+    document.getElementById('scanRing').style.display = 'none';
+    setStatus('Server error: '+e.message, 'red');
+  }
+}
+
+// ── DRAW BOXES ON CANVAS ─────────────────────────────────────
+function drawBoxes(faces, vw, vh){
+  const canvas = document.getElementById('camCanvas');
+  if(!canvas.width) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Scale factor if canvas != video size
+  const sx = canvas.width / vw;
+  const sy = canvas.height / vh;
+
+  faces.forEach(face => {
+    if(!face.bbox) return;
+    // bbox = [top, right, bottom, left] from face_recognition
+    const [top, right, bottom, left] = face.bbox;
+    const x = left * sx, y = top * sy;
+    const w = (right - left) * sx, h = (bottom - top) * sy;
+    const color = face.is_known ? '#00d4b8' : '#f03e3e';
+    const cs = 16;
+
+    ctx.strokeStyle = color; ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(x+cs,y);ctx.lineTo(x,y);ctx.lineTo(x,y+cs);
+    ctx.moveTo(x+w-cs,y);ctx.lineTo(x+w,y);ctx.lineTo(x+w,y+cs);
+    ctx.moveTo(x,y+h-cs);ctx.lineTo(x,y+h);ctx.lineTo(x+cs,y+h);
+    ctx.moveTo(x+w-cs,y+h);ctx.lineTo(x+w,y+h);ctx.lineTo(x+w,y+h-cs);
+    ctx.stroke();
+
+    // Label
+    const label = face.is_known ? face.name : 'Unknown';
+    const conf = face.is_known ? ` ${face.confidence}%` : '';
+    ctx.fillStyle = face.is_known ? 'rgba(0,212,184,.88)' : 'rgba(240,62,62,.88)';
+    const tw = ctx.measureText(label+conf).width + 14;
+    ctx.fillRect(x, y - 20, tw, 19);
+    ctx.fillStyle = '#000'; ctx.font = 'bold 10px JetBrains Mono, monospace';
+    ctx.fillText(label+conf, x+5, y-7);
+  });
+}
+
+// ── SHOW RESULTS ─────────────────────────────────────────────
+function showResults(faces){
+  const area = document.getElementById('resultsArea');
+  area.innerHTML = faces.map(face => {
+    const init    = (face.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || '?';
+    const conf    = face.is_known ? face.confidence : 0;
+    const already = face.already_marked === true;
+
+    // Card type: remarked (amber) | known (cyan) | unknown (red)
+    const cardClass   = already ? 'remarked' : (face.is_known ? 'known' : 'unknown');
+    const avClass     = already ? '' : (face.is_known ? 'known' : 'unknown');
+    const nameColor   = already ? 'var(--amber)' : (face.is_known ? 'var(--cyan)' : 'var(--red)');
+    const verdictCls  = already ? '' : (face.is_known ? 'known' : 'unknown');
+    const verdictText = already ? '⏱ ALREADY MARKED' : (face.is_known ? '✓ PRESENT' : '✗ UNKNOWN');
+    const verdictStyle= already
+      ? 'background:rgba(245,166,35,.1);color:var(--amber);border:1px solid rgba(245,166,35,.25);font-size:10px;padding:3px 10px;border-radius:4px;font-family:var(--mono);font-weight:600;white-space:nowrap;align-self:flex-start'
+      : '';
+    const statusMsg   = face.attendance_status || '';
+
+    return `<div class="result-card ${cardClass}">
+      <div class="rc-av ${avClass}" style="border-color:${nameColor}">${init}</div>
+      <div class="rc-info">
+        <div class="rc-name" style="color:${nameColor}">${face.is_known ? face.name : 'Unknown Person'}</div>
+        <div class="rc-meta">${face.is_known ? ((face.info&&face.info.role)||'') + (face.info&&face.info.department?' · '+face.info.department:'') : 'Not enrolled in database'}</div>
+        <div class="rc-meta" style="color:${already?'var(--amber)':''}">${statusMsg}</div>
+        <div class="conf-wrap"><div class="conf-bar" style="width:${conf}%;background:${nameColor}"></div></div>
+      </div>
+      ${verdictStyle
+        ? `<div style="${verdictStyle}">${verdictText}</div>`
+        : `<div class="rc-verdict ${verdictCls}">${verdictText}</div>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function showNoFace(){
+  document.getElementById('resultsArea').innerHTML = `
+    <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">
+      👤 No face detected<br><span style="font-size:11px;color:var(--text3)">Move closer or improve lighting</span>
+    </div>`;
+}
+
+// ── LOG ───────────────────────────────────────────────────────
+function addToLog(face){
+  // Avoid duplicate entries within 5 seconds
+  const now = Date.now();
+  const key = face.name + '_' + Math.floor(now/5000);
+  if(logData.find(l=>l.key===key)) return;
+  logData.unshift({...face, key, time: new Date().toLocaleTimeString()});
+  renderLog();
+}
+
+function renderLog(){
+  const el = document.getElementById('logList');
+  document.getElementById('logCount').textContent = logData.length + ' records';
+  if(!logData.length){
+    el.innerHTML='<div style="font-size:13px;color:var(--text2);text-align:center;padding:16px">No records yet</div>';
+    return;
+  }
+  el.innerHTML = logData.slice(0,40).map(e=>{
+    const init = e.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
+    return `<div class="log-item">
+      <div class="li-av ${e.is_known?'k':'u'}">${init}</div>
+      <div class="li-info">
+        <div class="li-name">${e.is_known?e.name:'Unknown'}</div>
+        <div class="li-time">d=${e.distance} · ${e.time}</div>
+      </div>
+      <span class="li-tag ${e.is_known?'p':'u'}">${e.is_known?'PRESENT':'UNKNOWN'}</span>
+    </div>`;
+  }).join('');
+}
+
+function clearLog(){ logData=[]; renderLog(); }
+</script>
+{% endblock %}

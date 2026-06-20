@@ -1,0 +1,11 @@
+flask>=2.3.0
+flask-cors>=4.0.0
+face-recognition>=1.3.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+pandas>=2.0.0
+Pillow>=10.0.0
+
+# Transfer-learning CNN recognizer (ResNet34)
+torch>=2.0.0
+torchvision>=0.15.0
